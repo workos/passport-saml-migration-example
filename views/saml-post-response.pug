@@ -1,0 +1,11 @@
+doctype html
+html(lang='en')
+  body(onload='document.forms[0].submit()')
+    noscript
+      p: Your Browser does not support JavaScript. Please press "continue" below.
+
+    form(action=acsUrl method='POST')
+      input(type='hidden' name='RelayState' value=relayState)
+      input(type='hidden' name='SAMLResponse' value=samlResponse)
+
+      button: Continue

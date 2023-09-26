@@ -5,9 +5,9 @@ block content
 
   form(action='/authenticate' method='POST')
     div
-      label(for='method') Method:
-      select(id='method' name='method')
-        option(value='Passport SAML') passport
-        option(value='WorkOS') workos
+      label(for='sso-provider') Method:
+      select#sso-provider(name='sso_provider')
+        option(value='passport') Passport SAML
+        option(value='workos') WorkOS SSO
 
     button Sign in
