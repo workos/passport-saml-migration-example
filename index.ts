@@ -1,14 +1,14 @@
 import "dotenv/config";
 
-import express, { Request } from "express";
+import express from "express";
 import passport from "passport";
 import session from "express-session";
 import { fromEnvOrThrow, isProduction } from "./src/environment";
 import { MultiSamlStrategy, Profile, VerifiedCallback } from "passport-saml";
 import { SamlConfigStore } from "./src/saml-config-store";
 import { User, UserStore } from "./src/user-store";
-import { workos, workosClientId } from "./src/workos";
 import cookieParser from "cookie-parser";
+import { WorkOsSsoStrategy } from "./src/workos-strategy";
 
 const app = express();
 
@@ -56,6 +56,24 @@ passport.use(
     },
   ),
 );
+passport.use(
+  new WorkOsSsoStrategy(
+    {
+      clientID: fromEnvOrThrow("WORKOS_CLIENT_ID"),
+      clientSecret: fromEnvOrThrow("WORKOS_API_KEY"),
+      callbackURL: "http://localhost:3000/workos/callback",
+      clientOptions: {
+        apiHostname: isProduction ? undefined : "localhost:7000",
+        https: isProduction,
+      },
+    },
+    (_req, _accessToken, _refresh_token, profile, done) => {
+      const user = new UserStore().findByEmail(profile.email);
+
+      done(null, user);
+    },
+  ),
+);
 
 // Simply store the entire user object in the session for demo purposes.
 passport.serializeUser((user, done) => done(null, user));
@@ -77,42 +95,39 @@ app.get("/login", (req, res) => {
 });
 
 app.get("/logout", (req, res) => {
-  req.logout(() => {
-    res.redirect("/login");
-  });
+  req.logout(() => res.redirect("/login"));
 });
 
-app.post(
-  "/authenticate",
-  (req, res, next) => {
-    // This should normally be determined by persisted configuration in a
-    // database or a feature flag, but using a form parameter for demo purposes.
-    const method = req.body.sso_provider ?? "passport";
+app.post("/authenticate", (req, res, next) => {
+  // This should normally be determined by persisted configuration in a
+  // database or a feature flag, but using a form parameter for demo purposes.
+  const method = req.body.sso_provider ?? "passport";
 
-    switch (method) {
-      case "workos":
-        res.cookie("sso_provider", "workos", { httpOnly: true, maxAge: 30000 });
-        res.redirect(
-          workos.sso.getAuthorizationURL({
-            redirectURI: "http://localhost:3000/workos/callback",
-            clientID: workosClientId,
+  switch (method) {
+    case "workos":
+      res.cookie("sso_provider", "workos", { httpOnly: true, maxAge: 30000 });
+      passport.authenticate("workos")(
+        {
+          ...req,
+          workOsSelector: {
             connection: fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ID"),
-          }),
-        );
-        break;
-      case "passport":
-        res.cookie("sso_provider", "passport", {
-          httpOnly: true,
-          maxAge: 30000,
-        });
-        next();
-        break;
-      default:
-        next();
-    }
-  },
-  passport.authenticate("saml"),
-);
+          },
+        },
+        res,
+        next,
+      );
+      break;
+    case "passport":
+      res.cookie("sso_provider", "passport", {
+        httpOnly: true,
+        maxAge: 30000,
+      });
+      passport.authenticate("saml")(req, res, next);
+      break;
+    default:
+      next();
+  }
+});
 app.post(
   "/authenticate/callback",
   (req, res, next) => {
@@ -126,27 +141,15 @@ app.post(
 
     next();
   },
-  passport.authenticate("saml", { failureRedirect: "/", failureMessage: true }),
-  (_req, res) => {
-    res.redirect("/");
-  },
+  passport.authenticate("saml", { failureRedirect: "/" }),
+  (_req, res) => res.redirect("/"),
 );
 
-app.get("/workos/callback", async (req, res) => {
-  if (!(typeof req.query.code === "string")) {
-    res.status(400);
-    return res.send("400");
-  }
-
-  const { profile } = await workos.sso.getProfileAndToken({
-    code: req.query.code,
-    clientID: workosClientId,
-  });
-
-  console.info({ profile });
-
-  res.send("WorkOS Callback");
-});
+app.get(
+  "/workos/callback",
+  passport.authenticate("workos", { failureRedirect: "/" }),
+  (_req, res) => res.redirect("/"),
+);
 
 const port = process.env.PORT ?? 3000;
 
