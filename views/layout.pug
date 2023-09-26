@@ -1,0 +1,16 @@
+doctype html
+html(lang='en')
+  head
+    title Passport SAML -> WorkOS
+  body
+    header
+      ul
+        li: a(href='/') Home
+        li
+          if user
+            a(href='/logout') Logout
+          else
+            a(href='/login') Login
+
+    main
+      block content

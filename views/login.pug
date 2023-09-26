@@ -1,0 +1,13 @@
+extends layout
+
+block content
+  h1 Sign-in with SSO
+
+  form(action='/authenticate' method='POST')
+    div
+      label(for='method') Method:
+      select(id='method' name='method')
+        option(value='Passport SAML') passport
+        option(value='WorkOS') workos
+
+    button Sign in
