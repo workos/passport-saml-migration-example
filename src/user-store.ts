@@ -1,3 +1,5 @@
+import { Profile } from "@workos-inc/node";
+
 export interface User {
   email: string;
 }
