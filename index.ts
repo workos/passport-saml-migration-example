@@ -68,7 +68,7 @@ passport.use(
       },
     },
     (_req, _accessToken, _refresh_token, profile, done) => {
-      const user = new UserStore().findByEmail(profile.email);
+      const user = new UserStore().findByProfile(profile);
 
       done(null, user);
     },

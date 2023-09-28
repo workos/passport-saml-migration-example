@@ -14,4 +14,13 @@ export class UserStore {
   findByEmail(email: string): User {
     return { email };
   }
+
+  /**
+   * Similar to `findByEmail`, this doesn't actually perform any lookups. Actual
+   * production applications should make sure to use a combination of the `profile.id`
+   * and `profile.organizationId` to ensure lookups are scoped to the correct tenant.
+   */
+  findByProfile(profile: Profile): User {
+    return { email: profile.email };
+  }
 }
