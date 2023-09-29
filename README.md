@@ -41,6 +41,7 @@ Create an APP in your IDP of choice, setting the following:
 We will configure the WorkOS side of things, which will be our "post-migration" state.
 
 - `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` are obtained from the WorkOS dashboard, on the "API Keys" page.
+- In the WorkOS Dashboard, visit the Configuration page and add a new "Sign in callback".  Its value will be your tunnel host combined with a `/workos/callback` path; i.e. ``https://7736-2001-871-216-2b68-69bd-a3bb-d4d6-af3f.ngrok-free.app/workos/callback`.  Set the `WORKOS_CALLBACK_URL`
 - In the WorkOS dashboard, create an organization representing one of your customers.
 - Under the "Single Sign On" feature, create a new connection matching the IDP you selected.
 - Copy the Connection ID to the `EXAMPLE_WORKOS_CONNECTION_ID` env var

@@ -109,7 +109,7 @@ passport.use(
     {
       clientID: fromEnvOrThrow("WORKOS_CLIENT_ID"),
       clientSecret: fromEnvOrThrow("WORKOS_API_KEY"),
-      callbackURL: `${fromEnvOrThrow("EXAMPLE_ISSUER")}workos/callback`,
+      callbackURL: fromEnvOrThrow("WORKOS_CALLBACK_URL"),
     },
     (_req, _accessToken, _refresh_token, profile, done) => {
       // Similar to the `MultiSamlStrategy`, this second callback takes the `profile` and
