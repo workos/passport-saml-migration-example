@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import URL from "node:url";
 import express from "express";
 import passport from "passport";
 import session from "express-session";
@@ -59,6 +60,7 @@ passport.use(
         );
 
         done(null, {
+          protocol: `${URL.parse(fromEnvOrThrow("EXAMPLE_ISSUER")).protocol}//`,
           path: "/authenticate/callback",
           entryPoint: ssoUrl.toString(),
           issuer,
