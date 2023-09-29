@@ -61,5 +61,5 @@ First, sign in using only passport-saml.  You should be presented with a login f
 
 #### 6. Sign in via WorkOS
 
-Log out, and log in again, selecting "WorkOS SSO" as the method.  You should again be logged in, but this time via WorkOS.  You can view your sessions
+Log out, and log in again, selecting "WorkOS SSO" as the method.  You should again be logged in, but this time via WorkOS.  You can view the authenticated sessions in the Sessions tab of the connection page in the WorkOS dashboard.
 
