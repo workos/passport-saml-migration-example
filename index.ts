@@ -61,6 +61,7 @@ passport.use(
 
         done(null, {
           protocol: `${URL.parse(fromEnvOrThrow("EXAMPLE_ISSUER")).protocol}//`,
+          host: URL.parse(fromEnvOrThrow("EXAMPLE_ISSUER")).host ?? undefined,
           path: "/authenticate/callback",
           entryPoint: ssoUrl.toString(),
           issuer,
@@ -108,7 +109,7 @@ passport.use(
     {
       clientID: fromEnvOrThrow("WORKOS_CLIENT_ID"),
       clientSecret: fromEnvOrThrow("WORKOS_API_KEY"),
-      callbackURL: "http://localhost:3000/workos/callback",
+      callbackURL: `${fromEnvOrThrow("EXAMPLE_ISSUER")}workos/callback`,
     },
     (_req, _accessToken, _refresh_token, profile, done) => {
       // Similar to the `MultiSamlStrategy`, this second callback takes the `profile` and
