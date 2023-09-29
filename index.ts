@@ -10,10 +10,10 @@ import { User, UserStore } from "./src/user-store";
 import cookieParser from "cookie-parser";
 import { WorkOsSsoStrategy } from "./src/workos-strategy";
 
+// Standard setup for an express application that uses Passport, so we can
+// hand-wave all of this.
 const app = express();
-
 app.set("view engine", "pug");
-
 app.use(express.urlencoded({ extended: true }));
 app.use(
   session({
@@ -25,10 +25,35 @@ app.use(
 );
 app.use(cookieParser());
 
+// `MultiSamlStrategy` is the Passport strategy we'll be migrating away from. Note
+// that we use the _MultiSamlStrategy_, which represents an application that can
+// delegate to multiple different identity providers (IdP's) for authentication. This
+// is the most common setup for most multi-tenant applications.
 passport.use(
   new MultiSamlStrategy(
     {
+      // We need to specify `getSamlOptions` in order to return the relevant SAML
+      // configuration to initiate authentication for the current request.
       getSamlOptions: (req, done) => {
+        // It varies by application how the relevant configuration would be determined
+        // from the request, so this is abstracted away in the `SamlConfigStore`.
+        //
+        // Some real-world strategies applications might use:
+        //
+        //   * Prompt the user -- Have the user tell you which organization they
+        //     are attempting to sign in to.
+        //   * Email domain -- Have the user enter their email address and then use
+        //     the email domain to locate their organization.
+        //   * Request Host -- If each tenant of the application gets their own
+        //     subdomain, then the application can use the `Host` header of the request
+        //     to locate the user's organization.
+        //
+        // You can find more information about sign-in UX strategies in the WorkOS docs:
+        //
+        //   https://workos.com/docs/sso/ux/sign-in
+        //
+        // We'll continue to use this `SamlConfigStore` later to lookup relevant migration
+        // configuration.
         const { cert, issuer, ssoUrl } = new SamlConfigStore().findByRequest(
           req,
         );
@@ -41,6 +66,13 @@ passport.use(
         });
       },
     },
+    // Passport refresher:
+    //
+    // This callback takes the "profile", which is a representation of the authenticated
+    // user from the IdP, and should look-up the "real" user object from the application's
+    // persistence layer.
+    //
+    // Later, this user object is passed to `serializeUser` which we'll talk more about there.
     (profile: Profile | null | undefined, done: VerifiedCallback) => {
       if (!profile) {
         return done(new Error("Profile is missing."));
@@ -50,12 +82,24 @@ passport.use(
         return done(new Error("Profile is missing an email."));
       }
 
+      // In a real application, `UserStore` might make perform a Database query to
+      // retrieve the user object.
       const user = new UserStore().findByEmail(profile.email);
 
       done(null, user as unknown as Record<string, unknown>);
     },
   ),
 );
+
+// The `WorkOsSsoStrategy` is the Passport strategy we'll be migrating towards. The code
+// itself is a very thin wrapper around the WorkOS SDK in order to integrate with Passport
+// itself. Check out the WorkOS example apps if you'd like to see how a Node app might
+// implement SSO without integrating with Passport:
+//
+//   https://github.com/workos/node-example-applications
+//
+// For this example, we'll choose to implement WorkOS as a Passport strategy to minimize
+// the differences to the rest of the application.
 passport.use(
   new WorkOsSsoStrategy(
     {
@@ -68,6 +112,12 @@ passport.use(
       },
     },
     (_req, _accessToken, _refresh_token, profile, done) => {
+      // Similar to the `MultiSamlStrategy`, this second callback takes the `profile` and
+      // looks up the user in the application's persistence.
+      //
+      // Note that here we use `findByProfile`. In a real application, take care to scope
+      // any lookups by the profile's `organizationId`, in addition to other fields like
+      // the profile's ID or email.
       const user = new UserStore().findByProfile(profile);
 
       done(null, user);
@@ -75,33 +125,48 @@ passport.use(
   ),
 );
 
-// Simply store the entire user object in the session for demo purposes.
+// These two functions are responsible for saving the user into the session, or recalling it
+// from the session. This might normally look like `serializeUser` plucking the user's ID,
+// and then `deserializeUser` taking that plucked ID and calling `done` with the user after
+// looking it up in a database.
+//
+// Since this is just an example, we'll serialize the entire user object in order to keep
+// things simple.
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => done(null, user as User));
 
+// Standard boilerplate when adding Passport to an Express application.
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.get("/", (req, res) => {
-  res.render("root", { user: req.user });
-});
+// These next three routes are here to facilitate the example login and logout pages. There
+// isn't much notable about them, and so we'll skip over them quickly.
+app.get("/", (req, res) => res.render("root", { user: req.user }));
+app.get("/login", (req, res) =>
+  req.user ? res.redirect("/") : res.render("login"),
+);
+app.get("/logout", (req, res) => req.logout(() => res.redirect("/login")));
 
-app.get("/login", (req, res) => {
-  if (req.user) {
-    return res.redirect("/");
-  }
-
-  res.render("login");
-});
-
-app.get("/logout", (req, res) => {
-  req.logout(() => res.redirect("/login"));
-});
-
+// This endpoint is the crux of the migration process. It either sends the user down the
+// legacy `passport-saml`-based SSO flow, or uses the new WorkOS SSO strategy.
 app.post("/authenticate", (req, res, next) => {
   const config = new SamlConfigStore();
+
+  // For applications that wish to incrementally roll-out WorkOS to their existing SSO users,
+  // they'll probably incorporate various techniques into controlling when this
+  // `getProviderByRequest` call returns either `"workos"` or `"passport"`.
+  //
+  // For example, use of feature flags targeted at specific tenants. Or, a staged roll-out
+  // where only an X% of customers use the new flow.
+  //
+  // Once things look good, eventually this will return `"workos"` for all users.
   const method = config.getProviderByRequest(req);
 
+  // Note the usage of a cookie here. When the user later comes back from the IdP at the
+  // `/authenticate/callback` endpoint, we can look at this cookie value to determine
+  // which path the user should continue down. This helps to ensure that we don't start
+  // users down the old flow, but then attempt to enter them into the new flow when
+  // they come back if `getProviderByRequest` would have later returned a different value.
   res.cookie("sso_provider", method, { httpOnly: true, maxAge: 30000 });
 
   switch (method) {
@@ -122,12 +187,37 @@ app.post("/authenticate", (req, res, next) => {
       break;
   }
 });
+
+// Here's the original `passport-saml` callback endpoint. Normally, this would only
+// consist of the call to the Passport authenticate middleware:
+//
+//   passport.authenticate("saml", { successRedirect: "/" }),
+//
+// However, in this case have an additional middleware before it.
 app.post(
   "/authenticate/callback",
+  // IdP's that still have an ACS URL configured to point directly to the application
+  // (rather than WorkOS) will continue to send users here. We need to handle those
+  // responses by forwarding them to WorkOS.
+  //
+  // That's what this middleware does. We use the SAML POST binding to take the SAML
+  // response that was received and "RePOST" it to WorkOS.
+  //
+  // You can read more about that binding here:
+  //
+  //   https://en.wikipedia.org/wiki/SAML_2.0#HTTP_POST_Binding
+  //
+  // In short, the SAML spec outlines it as a self-submitting form with two parameters;
+  // the `SAMLResponse` and the `RelayState`. This is actually the same binding that the
+  // IdP originally used to send the response to this application. This application can
+  // use the same method to essentially forward the response to WorkOS.
   (req, res, next) => {
+    // First, we check for the presence and value of the cookie from earlier...
     if (req.cookies.sso_provider === "workos") {
       const { workosAcsUrl } = new SamlConfigStore().findByRequest(req);
 
+      // If the cookie is set, we respond with the POST binding. Check out the
+      // template in `views` to see how to implement it. It's pretty simple.
       return res.render("saml-post-response", {
         acsUrl: workosAcsUrl,
         samlResponse: req.body.SAMLResponse,
@@ -135,20 +225,27 @@ app.post(
       });
     }
 
+    // ...otherwise, we forward the request to the "next" middlware, which is the old
+    // `passport-saml` middleware. As roll-out WorkOS, eventually no users will
+    // make it here.
     next();
   },
-  passport.authenticate("saml", { failureRedirect: "/" }),
-  (_req, res) => res.redirect("/"),
+  passport.authenticate("saml", { successRedirect: "/" }),
 );
 
+// The standard WorkOS callback. There isn't any migration specific logic needed
+// here. Check out the WorkOS docs for more information about how to normally
+// implement this endpoint:
+//
+//    https://workos.com/docs/sso/2-add-sso-to-your-app/add-a-callback-endpoint
+//
 app.get(
   "/workos/callback",
-  passport.authenticate("workos", { failureRedirect: "/" }),
-  (_req, res) => res.redirect("/"),
+  passport.authenticate("workos", { successRedirect: "/" }),
 );
 
+// The last of the boilerplate. Start the app!
 const port = process.env.PORT ?? 3000;
-
 app.listen(port, () => {
   console.info(`Listening on port ${port}...`);
 });
