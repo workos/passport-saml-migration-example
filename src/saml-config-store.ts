@@ -25,7 +25,7 @@ export class SamlConfigStore {
       ssoUrl: new URL(fromEnvOrThrow("EXAMPLE_SSO_URL")),
       issuer: fromEnvOrThrow("EXAMPLE_ISSUER"),
       cert: fromEnvOrThrow("EXAMPLE_IDP_PUBLIC_CERT"),
-      workosAcsUrl: new URL(fromEnvOrThrow("")),
+      workosAcsUrl: new URL(fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ACS_URL")),
       workosConnectionId: fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ID"),
     };
   }
