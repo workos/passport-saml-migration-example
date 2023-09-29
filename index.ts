@@ -99,41 +99,37 @@ app.get("/logout", (req, res) => {
 });
 
 app.post("/authenticate", (req, res, next) => {
-  // This should normally be determined by persisted configuration in a
-  // database or a feature flag, but using a form parameter for demo purposes.
-  const method = req.body.sso_provider ?? "passport";
+  const config = new SamlConfigStore();
+  const method = config.getProviderByRequest(req);
+
+  res.cookie("sso_provider", method, { httpOnly: true, maxAge: 30000 });
 
   switch (method) {
     case "workos":
-      res.cookie("sso_provider", "workos", { httpOnly: true, maxAge: 30000 });
+      const { workosConnectionId } = config.findByRequest(req);
+
       passport.authenticate("workos")(
         {
           ...req,
-          workOsSelector: {
-            connection: fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ID"),
-          },
+          workOsSelector: { connection: workosConnectionId },
         },
         res,
         next,
       );
       break;
     case "passport":
-      res.cookie("sso_provider", "passport", {
-        httpOnly: true,
-        maxAge: 30000,
-      });
       passport.authenticate("saml")(req, res, next);
       break;
-    default:
-      next();
   }
 });
 app.post(
   "/authenticate/callback",
   (req, res, next) => {
     if (req.cookies.sso_provider === "workos") {
+      const { workosAcsUrl } = new SamlConfigStore().findByRequest(req);
+
       return res.render("saml-post-response", {
-        acsUrl: fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ACS_URL"),
+        acsUrl: workosAcsUrl,
         samlResponse: req.body.SAMLResponse,
         relayState: req.body.RelayState,
       });

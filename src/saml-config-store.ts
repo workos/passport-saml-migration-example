@@ -6,6 +6,7 @@ export interface SamlConfig {
   issuer: string;
   cert: string;
   workosConnectionId: string;
+  workosAcsUrl: URL;
 }
 
 /**
@@ -24,7 +25,14 @@ export class SamlConfigStore {
       ssoUrl: new URL(fromEnvOrThrow("EXAMPLE_SSO_URL")),
       issuer: fromEnvOrThrow("EXAMPLE_ISSUER"),
       cert: fromEnvOrThrow("EXAMPLE_IDP_PUBLIC_CERT"),
+      workosAcsUrl: new URL(fromEnvOrThrow("")),
       workosConnectionId: fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ID"),
     };
+  }
+
+  getProviderByRequest(req: Request): "passport" | "workos" {
+    // This should normally be determined by persisted configuration in a
+    // database or a feature flag, but using a form parameter for demo purposes.
+    return req.body.sso_provider ?? "passport";
   }
 }
