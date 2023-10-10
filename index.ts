@@ -176,12 +176,12 @@ app.post("/authenticate", (req, res, next) => {
 
   switch (method) {
     case "workos":
-      const { workosConnectionId } = config.findByRequest(req);
+      const { workosOrganizationId } = config.findByRequest(req);
 
       passport.authenticate("workos")(
         {
           ...req,
-          workOsSelector: { connection: workosConnectionId },
+          workOsSelector: { organization: workosOrganizationId },
         },
         res,
         next,

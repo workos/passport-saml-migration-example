@@ -5,7 +5,7 @@ export interface SamlConfig {
   ssoUrl: URL;
   issuer: string;
   cert: string;
-  workosConnectionId: string;
+  workosOrganizationId: string;
   workosAcsUrl: URL;
 }
 
@@ -26,7 +26,7 @@ export class SamlConfigStore {
       issuer: fromEnvOrThrow("EXAMPLE_ISSUER"),
       cert: fromEnvOrThrow("EXAMPLE_IDP_PUBLIC_CERT"),
       workosAcsUrl: new URL(fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ACS_URL")),
-      workosConnectionId: fromEnvOrThrow("EXAMPLE_WORKOS_CONNECTION_ID"),
+      workosOrganizationId: fromEnvOrThrow("EXAMPLE_WORKOS_ORGANIZATION_ID"),
     };
   }
 
