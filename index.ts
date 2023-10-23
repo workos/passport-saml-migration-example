@@ -198,35 +198,26 @@ app.post("/authenticate", (req, res, next) => {
 //
 //   passport.authenticate("saml", { successRedirect: "/" }),
 //
-// In this case have an additional middleware before it.
+// In this case, we have an additional middleware before it.
 app.post(
   "/authenticate/callback",
   // IdP's that still have an ACS URL configured to point directly to the application
   // (rather than WorkOS) will continue to send users here. We need to handle those
-  // responses by forwarding them to WorkOS.That's what this middleware does.
+  // responses by forwarding them to WorkOS. That's what this middleware does.
   //
-  // We use the SAML POST binding to take the SAML response that was received
-  // and "RePOST" it to WorkOS. You can read more about that binding here:
-  //
-  //   https://en.wikipedia.org/wiki/SAML_2.0#HTTP_POST_Binding
-  //
-  // In short, the SAML spec outlines it as a self-submitting form with two parameters;
-  // the `SAMLResponse` and the `RelayState`. This is actually the same binding that the
-  // IdP originally used to send the response. The application can use the same method
-  // to forward the response to WorkOS.
+  // We redirect the request using a `307` to ensure the client preserves the `POST`
+  // method. This shouldn't be a permanent redirect since it depends on the value of
+  // the `sso_provider` cookie we set earlier.
   (req, res, next) => {
     // First, we check for the presence and value of the cookie from earlier...
     if (req.cookies.sso_provider === "workos") {
-      // The WorkOS ACS URL can be found in the WorkOS dashboard when viewing a connection.
+      // Retrieve the WorkOS ACS URL from the SAML configuration for the current request,
+      // similar to what we did earlier. Note that the WorkOS ACS URL can be found in
+      // the WorkOS dashboard when viewing a connection.
       const { workosAcsUrl } = new SamlConfigStore().findByRequest(req);
 
-      // If the cookie is set, we respond with the POST binding. Check out the
-      // template in `views` to see how to implement it. It's pretty simple.
-      return res.render("saml-post-response", {
-        acsUrl: workosAcsUrl,
-        samlResponse: req.body.SAMLResponse,
-        relayState: req.body.RelayState,
-      });
+      // If the cookie is set, we redirect the SAML response to WorkOS.
+      return res.redirect(307, workosAcsUrl.toString());
     }
 
     // ...otherwise, we forward the request to the "next" middleware, which is the old
